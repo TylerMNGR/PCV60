@@ -395,8 +395,11 @@
 
         // NEW FUNCTION: Updated to open the user-specified URL
         const loadInspectionForm = (assetId) => {
-            const externalUrl = "https://tylermngr.github.io/PCV60/";
-            window.open(externalUrl, '_blank');
+            // Updated to use the file:/// protocol for the specified local path.
+            // Note: The path uses forward slashes and the file:/// protocol.
+            // W:\Workshop\pull\Index.html.html -> file:///W:/Workshop/pull/Index.html.html
+            const localFilePath = "file:///W:/Workshop/pull/Index.html.html";
+            window.open(localFilePath, '_blank');
         };
 
         // Function to switch between display and edit mode
