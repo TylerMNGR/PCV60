@@ -393,13 +393,12 @@
 
         // --- ACTION FUNCTIONS ---
 
-        // NEW FUNCTION: Updated to open the user-specified URL
+        // **MODIFIED FUNCTION** to open the specified external URL
         const loadInspectionForm = (assetId) => {
-            // Updated to use the file:/// protocol for the specified local path.
-            // Note: The path uses forward slashes and the file:/// protocol.
-            // W:\Workshop\pull\Index.html.html -> file:///W:/Workshop/pull/Index.html.html
-            const localFilePath = "file:///W:/Workshop/pull/Index.html.html";
-            window.open(localFilePath, '_blank');
+            // Set the target URL provided by the user
+            const inspectionURL = "https://tylermngr.github.io/GTTPCV/";
+            // Open the URL in a new tab
+            window.open(inspectionURL, '_blank');
         };
 
         // Function to switch between display and edit mode
