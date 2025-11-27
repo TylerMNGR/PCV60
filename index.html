@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fully Editable Vehicle Asset & Inspection Planner</title>
+    <style>
+        /* General Styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #1a237e; /* Dark Blue/Grey Background */
+            color: #f0f0f0; /* Light Text */
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #ff9800; /* Orange Accent */
+            border-bottom: 2px solid #ff9800; /* Orange Accent */
+            padding-bottom: 5px;
+            margin-top: 30px;
+        }
+        #datetime {
+            font-size: 1.1em;
+            color: #ffcc80;
+        }
+
+        /* Table Styling */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Darker Shadow */
+            background-color: #ffffff; /* Keep table background white for readability */
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+            color: #333; /* Ensure cell text remains readable */
+        }
+        th {
+            background-color: #f0f0f0; /* Light header background */
+            font-weight: bold;
+            color: #1a237e; /* Dark text for headers */
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        /* Input and Button Styling */
+        input[type="text"], input[type="date"], input[type="number"], select {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        input[type="number"] {
+            max-width: 60px;
+        }
+        .action-cell button {
+            padding: 8px 12px;
+            margin: 2px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        .edit-btn { background-color: #2196f3; } /* Blue */
+        .edit-btn:hover { background-color: #0b7dda; }
+        .save-btn { background-color: #4CAF50; } /* Green */
+        .save-btn:hover { background-color: #45a049; }
+        .remove-btn { background-color: #f44336; } /* Red */
+        .remove-btn:hover { background-color: #da190b; }
+        .load-inspection-btn { background-color: #ff9800; } /* Orange */
+        .load-inspection-btn:hover { background-color: #fb8c00; }
+
+        /* General Controls */
+        #controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .add-asset-btn, #toggleFilterBtn {
+            padding: 10px 15px;
+            background-color: #00bcd4; /* Cyan */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        .add-asset-btn:hover, #toggleFilterBtn:hover {
+            background-color: #00acc1;
+        }
+        #assetSearch {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            flex-grow: 1;
+            max-width: 300px;
+        }
+
+        /* Planner Table Specifics */
+        .status-overdue { background-color: #f44336; color: white; font-weight: bold; }
+        .status-due-soon { background-color: #ffc107; color: #333; font-weight: bold; }
+        .status-on-track { background-color: #4CAF50; color: white; }
+        .status-active { background-color: #2196f3; color: white; }
+        .status-workshop { background-color: #9e9e9e; color: white; }
+        
+        /* Edit Mode Styles */
+        .editable td {
+            background-color: #ffe0b2; /* Light orange background to highlight edit mode */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-content">
+        <h1>Vehicle Asset & Inspection Planner</h1>
+        <div id="datetime"></div>
+    </div>
+
+    <hr>
+
+    <section id="asset-register">
+        <h2>Asset Register</h2>
+
+        <div id="controls">
+            <input type="text" id="assetSearch" placeholder="Search by Reg or Model..." onkeyup="searchAssets()">
+            <button class="add-asset-btn" onclick="addNewAsset()">+ Add New Asset</button>
+            <button id="toggleFilterBtn" onclick="toggleAssetFilter()">Expand to Show All Assets</button>
+        </div>
+
+        <table id="assetTable">
+            <thead>
+                <tr>
+                    <th>Reg Mark</th>
+                    <th>Model / Type</th>
+                    <th>Last Insp Due</th>
+                    <th>Frequency (Weeks)</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </section>
+
+    <hr>
+
+    <section id="inspection-planner">
+        <h2>Inspection Planner (Next Due Date)</h2>
+        <table id="plannerTable">
+            <thead>
+                <tr>
+                    <th>Reg Mark</th>
+                    <th>Model / Type</th>
+                    <th>Next Due Date</th>
+                    <th>Days Remaining</th>
+                    <th>Inspection Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </section>
+
+    <script>
+        // 1. ASSET DATA - Core array for vehicle data
+        let vehicleAssets = [];
+        const statusOptions = ["Active", "In Workshop", "Disposed", "VOR", "On Loan"];
+        let nextAssetId = 1;
+        let showAllAssets = false; // State variable for filtering
+
+        // --- LOCAL STORAGE UTILITY FUNCTIONS ---
+
+        // Function to load data from localStorage
+        const loadAssetsFromStorage = () => {
+            const storedAssets = localStorage.getItem('vehicleAssets');
+            if (storedAssets) {
+                vehicleAssets = JSON.parse(storedAssets);
+                // Find the maximum ID and set nextAssetId higher
+                const maxId = vehicleAssets.reduce((max, asset) => Math.max(max, asset.id), 0);
+                nextAssetId = maxId + 1;
+            } else {
+                // Initial data from your original file for first run
+                vehicleAssets = [
+                    { id: 1, reg: "AU67CVV", model: "WNCT", lastDue: "2026-02-10", frequencyWeeks: 10, status: "Active" },
+                    { id: 2, reg: "AY66RXH", model: "WNCT", lastDue: "2026-03-04", frequencyWeeks: 10, status: "Active" },
+                    { id: 3, reg: "AY66RXJ", model: "WNCT", lastDue: "2026-02-16", frequencyWeeks: 10, status: "Active" },
+                    { id: 4, reg: "AY66RXK", model: "WNCT", lastDue: "2026-01-05", frequencyWeeks: 10, status: "Active" },
+                    { id: 5, reg: "AY66RXL", model: "WNCT", lastDue: "2026-01-05", frequencyWeeks: 5, status: "Active" },
+                    { id: 6, reg: "BX69CVJ", model: "GTT", lastDue: "2026-01-08", frequencyWeeks: 10, status: "Active" },
+                    { id: 7, reg: "DV21VPZ", model: "GTT", lastDue: "2026-02-19", frequencyWeeks: 5, status: "Active" },
+                    { id: 8, reg: "EA67XGS", model: "CHARITY", lastDue: "2026-03-06", frequencyWeeks: 10, status: "Active" },
+                    { id: 9, reg: "EU16MHE", model: "CHARITY", lastDue: "2026-02-17", frequencyWeeks: 10, status: "Active" },
+                    { id: 10, reg: "EU68OKT", model: "CHARITY", lastDue: "2026-03-10", frequencyWeeks: 10, status: "Active" },
+                    { id: 11, reg: "EY16ACU", model: "CHARITY", lastDue: "2026-01-13", frequencyWeeks: 10, status: "Active" },
+                    { id: 12, reg: "EY16NHE", model: "CHARITY", lastDue: "2026-02-16", frequencyWeeks: 10, status: "Active" },
+                    { id: 13, reg: "FN65PYY", model: "CHARITY", lastDue: "2026-01-13", frequencyWeeks: 10, status: "Active" },
+                    { id: 14, reg: "FN65ZYT", model: "CHARITY", lastDue: "2026-03-11", frequencyWeeks: 10, status: "Active" },
+                    { id: 15, reg: "GX65FDN", model: "GTT", lastDue: "2026-01-16", frequencyWeeks: 5, status: "Active" },
+                    { id: 16, reg: "KM19EFA", model: "CHARITY", lastDue: "2026-02-23", frequencyWeeks: 10, status: "Active" },
+                    { id: 17, reg: "KP21ONF", model: "CHARITY", lastDue: "2026-01-08", frequencyWeeks: 10, status: "Active" },
+                    { id: 18, reg: "KV69VWO", model: "CHARITY", lastDue: "2026-03-06", frequencyWeeks: 10, status: "Active" },
+                    { id: 19, reg: "KV70RHU", model: "CHARITY", lastDue: "2026-01-19", frequencyWeeks: 10, status: "Active" },
+                    { id: 20, reg: "KX21RZH", model: "CHARITY", lastDue: "2026-02-24", frequencyWeeks: 10, status: "Active" },
+                    { id: 21, reg: "LK14EAF", model: "CHARITY", lastDue: "2026-02-11", frequencyWeeks: 10, status: "Active" },
+                    { id: 22, reg: "LN18EWC", model: "GTT", lastDue: "2026-01-28", frequencyWeeks: 10, status: "Active" },
+                    { id: 23, reg: "LN18EWD", model: "GTT", lastDue: "2026-01-27", frequencyWeeks: 5, status: "Active" },
+                    { id: 24, reg: "LN18EWF", model: "GTT", lastDue: "2026-02-02", frequencyWeeks: 5, status: "Active" },
+                    { id: 25, reg: "LT63VJP", model: "CHARITY", lastDue: "2026-01-20", frequencyWeeks: 10, status: "Active" },
+                    { id: 26, reg: "LV16HMZ", model: "CHARITY", lastDue: "2026-01-20", frequencyWeeks: 10, status: "Active" },
+                    { id: 27, reg: "LX66AFJ", model: "CHARITY", lastDue: "2026-01-30", frequencyWeeks: 10, status: "Active" },
+                    { id: 28, reg: "LX66AMV", model: "CHARITY", lastDue: "2026-02-04", frequencyWeeks: 10, status: "Active" },
+                    { id: 29, reg: "MX11CZJ", model: "GTT", lastDue: "2026-02-03", frequencyWeeks: 5, status: "Active" },
+                    { id: 30, reg: "RY67RCU", model: "CHARITY", lastDue: "2026-01-06", frequencyWeeks: 10, status: "Active" },
+                    { id: 31, reg: "RX72TJJ", model: "GTT", lastDue: "2026-01-02", frequencyWeeks: 5, status: "Active" },
+                    { id: 32, reg: "SB66RUH", model: "CHARITY", lastDue: "2026-01-22", frequencyWeeks: 10, status: "Active" },
+                    { id: 33, reg: "SH16PVW", model: "CHARITY", lastDue: "2026-02-03", frequencyWeeks: 10, status: "Active" },
+                    { id: 34, reg: "SK18TKN", model: "GTT", lastDue: "2026-01-19", frequencyWeeks: 5, status: "Active" },
+                    { id: 35, reg: "SK18TKO", model: "GTT", lastDue: "2026-02-03", frequencyWeeks: 5, status: "Active" },
+                    { id: 36, reg: "SK65PVV", model: "GTT", lastDue: "2026-01-28", frequencyWeeks: 10, status: "Active" },
+                    { id: 37, reg: "SK68TMZ", model: "GTT", lastDue: "2026-01-09", frequencyWeeks: 5, status: "Active" },
+                    { id: 38, reg: "SK68TNE", model: "GTT", lastDue: "2026-01-27", frequencyWeeks: 5, status: "Active" },
+                    { id: 39, reg: "SN64FTX", model: "GTT", lastDue: "2026-01-15", frequencyWeeks: 5, status: "Active" },
+                    { id: 40, reg: "SN69ZVS", model: "GTT", lastDue: "2026-01-07", frequencyWeeks: 5, status: "Active" },
+                    { id: 41, reg: "SP59TSU", model: "GTT", lastDue: "2026-01-26", frequencyWeeks: 5, status: "Active" },
+                    { id: 42, reg: "WG71MXN", model: "CHARITY", lastDue: "2026-01-12", frequencyWeeks: 10, status: "Active" },
+                    { id: 43, reg: "WR25OFV", model: "GTT", lastDue: "2026-01-22", frequencyWeeks: 5, status: "Active" },
+                    { id: 44, reg: "YD66OUE", model: "GTT", lastDue: "2026-02-04", frequencyWeeks: 5, status: "Active" }
+                ];
+                nextAssetId = 45;
+            }
+        };
+
+        // Function to save data to localStorage
+        const saveAssetsToStorage = () => {
+            localStorage.setItem('vehicleAssets', JSON.stringify(vehicleAssets));
+        };
+
+        // --- CORE UTILITY FUNCTIONS ---
+        const formatDate = (date) => {
+            const d = new Date(date);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        const calculateNextDueDate = (lastDueDate, weeks) => {
+            if (!lastDueDate) return new Date(0);
+            // Ensure date is parsed correctly by adding 'T00:00:00' to avoid timezone issues
+            const lastDate = new Date(lastDueDate + 'T00:00:00'); 
+            lastDate.setDate(lastDate.getDate() + (weeks * 7));
+            return lastDate;
+        };
+
+        const daysUntil = (targetDate) => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            targetDate.setHours(0, 0, 0, 0);
+
+            const diffTime = targetDate.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays;
+        };
+        // --- END CORE UTILITY FUNCTIONS ---
+
+
+        // --- CRUD & RENDERING ---
+
+        // Function to render the Asset Register Table
+        const renderAssetTable = (searchTerm = '') => {
+            const assetBody = document.getElementById('assetTable').getElementsByTagName('tbody')[0];
+            assetBody.innerHTML = ''; // Clear existing rows
+            
+            // 1. Calculate Planner details for filtering
+            const plannerAssets = vehicleAssets.map(asset => ({
+                ...asset,
+                nextDueDate: calculateNextDueDate(asset.lastDue, asset.frequencyWeeks),
+                daysLeft: daysUntil(calculateNextDueDate(asset.lastDue, asset.frequencyWeeks))
+            }));
+
+            // 2. Apply Due Date Filter (30 days or less, or overdue)
+            let filteredAssets = showAllAssets 
+                ? plannerAssets
+                : plannerAssets.filter(asset => asset.daysLeft <= 30);
+            
+            // 3. Apply Search Filter
+            if (searchTerm.trim() !== '') {
+                const searchLower = searchTerm.toLowerCase();
+                filteredAssets = filteredAssets.filter(asset => 
+                    asset.reg.toLowerCase().includes(searchLower) || 
+                    asset.model.toLowerCase().includes(searchLower)
+                );
+            }
+
+            // 4. Render Rows
+            filteredAssets.forEach(asset => {
+                let row = assetBody.insertRow();
+                row.id = `asset-row-${asset.id}`;
+                row.setAttribute('data-asset-id', asset.id);
+
+                // Data Cells
+                row.insertCell().innerHTML = `<span class="data-reg">${asset.reg}</span>`;
+                row.insertCell().innerHTML = `<span class="data-model">${asset.model}</span>`;
+                row.insertCell().innerHTML = `<span class="data-lastDue">${asset.lastDue}</span>`;
+                row.insertCell().innerHTML = `<span class="data-frequency">${asset.frequencyWeeks}</span>`;
+                row.insertCell().innerHTML = `<span class="data-status">${asset.status}</span>`;
+
+                // Action Cell (Edit/Save, Remove, and Load Inspection Buttons)
+                let actionCell = row.insertCell();
+                actionCell.className = 'action-cell';
+                actionCell.innerHTML = `
+                    <button class="edit-btn" onclick="toggleEdit(${asset.id})">Edit</button>
+                    <button class="remove-btn" onclick="removeAsset(${asset.id})">Remove</button>
+                    <button class="load-inspection-btn" onclick="loadInspectionForm(${asset.id})">Load Inspection</button>
+                `;
+            });
+            
+            // 5. Update the Expand Button text
+            const expandBtn = document.getElementById('toggleFilterBtn');
+            if (expandBtn) {
+                expandBtn.textContent = showAllAssets ? 'Contract to 30 Day View' : 'Expand to Show All Assets';
+            }
+        };
+
+        // Function to render the Inspection Planner Table
+        const renderPlannerTable = () => {
+            const plannerBody = document.getElementById('plannerTable').getElementsByTagName('tbody')[0];
+            plannerBody.innerHTML = ''; // Clear existing rows
+
+            vehicleAssets.forEach(asset => {
+                // Calculation
+                const nextDueDate = calculateNextDueDate(asset.lastDue, asset.frequencyWeeks);
+                const nextDueDateString = nextDueDate.getTime() > 0 ? formatDate(nextDueDate) : 'N/A';
+                const daysLeft = nextDueDate.getTime() > 0 ? daysUntil(nextDueDate) : Infinity;
+
+                // Status Determination
+                let inspectionStatus = '';
+                let statusClass = 'status-on-track';
+
+                if (asset.status === 'In Workshop') {
+                    inspectionStatus = 'Inspection Pending (In Workshop)';
+                    statusClass = 'status-workshop';
+                } else if (daysLeft === Infinity || isNaN(daysLeft)) {
+                    inspectionStatus = 'Date Required';
+                    statusClass = 'status-workshop';
+                } else if (daysLeft < 0) {
+                    inspectionStatus = `OVERDUE by ${Math.abs(daysLeft)} days!`;
+                    statusClass = 'status-overdue';
+                } else if (daysLeft <= 14) {
+                    inspectionStatus = `Due in ${daysLeft} days (High Priority)`;
+                    statusClass = 'status-due-soon';
+                } else {
+                    inspectionStatus = `Due in ${daysLeft} days`;
+                    statusClass = 'status-active';
+                }
+
+                // Populate Planner Table
+                let plannerRow = plannerBody.insertRow();
+                plannerRow.insertCell().textContent = asset.reg;
+                plannerRow.insertCell().textContent = asset.model;
+                plannerRow.insertCell().textContent = nextDueDateString;
+                plannerRow.insertCell().textContent = daysLeft === Infinity || isNaN(daysLeft) ? 'N/A' : daysLeft;
+                
+                let statusCell = plannerRow.insertCell();
+                statusCell.textContent = inspectionStatus;
+                statusCell.className = statusClass;
+            });
+        };
+
+        // Function to render both tables
+        const renderAllTables = (searchTerm = '') => {
+            renderAssetTable(searchTerm);
+            renderPlannerTable();
+        };
+
+        // --- ACTION FUNCTIONS ---
+
+        // NEW FUNCTION: Updated to open the user-specified URL
+        const loadInspectionForm = (assetId) => {
+            const externalUrl = "https://tylermngr.github.io/PCV60/";
+            window.open(externalUrl, '_blank');
+        };
+
+        // Function to switch between display and edit mode
+        const toggleEdit = (assetId) => {
+            const row = document.getElementById(`asset-row-${assetId}`);
+            const button = row.querySelector('.edit-btn, .save-btn');
+            const isEditing = button.classList.contains('save-btn');
+            const asset = vehicleAssets.find(a => a.id === assetId);
+
+            if (!asset) return; 
+
+            if (!isEditing) {
+                // --- SWITCH TO EDIT MODE ---
+                button.textContent = 'Save';
+                button.classList.remove('edit-btn');
+                button.classList.add('save-btn');
+
+                row.classList.add('editable');
+
+                // Replace spans with input fields/selects
+                row.querySelector('.data-reg').innerHTML = `<input type="text" value="${asset.reg}" id="edit-reg-${assetId}">`;
+                row.querySelector('.data-model').innerHTML = `<input type="text" value="${asset.model}" id="edit-model-${assetId}">`;
+                row.querySelector('.data-lastDue').innerHTML = `<input type="date" value="${asset.lastDue}" id="edit-lastDue-${assetId}">`;
+                row.querySelector('.data-frequency').innerHTML = `<input type="number" value="${asset.frequencyWeeks}" min="1" id="edit-frequency-${assetId}">`;
+                
+                // Status Select Dropdown
+                let statusHtml = `<select id="edit-status-${assetId}">`;
+                statusOptions.forEach(option => {
+                    const selected = (option === asset.status) ? 'selected' : '';
+                    statusHtml += `<option value="${option}" ${selected}>${option}</option>`;
+                });
+                statusHtml += `</select>`;
+                row.querySelector('.data-status').innerHTML = statusHtml;
+
+            } else {
+                // --- SWITCH TO DISPLAY MODE (SAVE CHANGES) ---
+                
+                const newReg = row.querySelector(`#edit-reg-${assetId}`).value.trim();
+                const newModel = row.querySelector(`#edit-model-${assetId}`).value.trim();
+                const newLastDue = row.querySelector(`#edit-lastDue-${assetId}`).value;
+                const newFrequency = parseInt(row.querySelector(`#edit-frequency-${assetId}`).value, 10);
+                const newStatus = row.querySelector(`#edit-status-${assetId}`).value;
+
+                // Simple validation
+                if (!newReg || !newModel || isNaN(newFrequency) || newFrequency < 1) {
+                    alert('Please enter a valid Registration, Model, and Frequency (must be > 0).');
+                    return; 
+                }
+
+                // Update the global vehicleAssets array
+                const assetIndex = vehicleAssets.findIndex(a => a.id === assetId);
+                if (assetIndex !== -1) {
+                    vehicleAssets[assetIndex] = {
+                        id: assetId,
+                        reg: newReg,
+                        model: newModel,
+                        lastDue: newLastDue,
+                        frequencyWeeks: newFrequency,
+                        status: newStatus
+                    };
+                }
+                
+                // Save to local storage after successful edit
+                saveAssetsToStorage();
+
+                // Re-render ALL tables
+                renderAllTables(document.getElementById('assetSearch').value);
+            }
+        };
+
+        // Function to add a new asset
+        const addNewAsset = () => {
+            const newAsset = {
+                id: nextAssetId++,
+                reg: "NEW_REG_00",
+                model: "Model Name",
+                lastDue: formatDate(new Date()),
+                frequencyWeeks: 4,
+                status: "On Loan"
+            };
+            vehicleAssets.push(newAsset);
+            saveAssetsToStorage();
+            renderAllTables(document.getElementById('assetSearch').value); 
+            // Automatically switch the new row to edit mode
+            setTimeout(() => toggleEdit(newAsset.id), 50);
+        };
+
+        // Function to remove an asset
+        const removeAsset = (assetId) => {
+            const asset = vehicleAssets.find(a => a.id === assetId);
+            if (confirm(`Are you sure you want to remove asset with Reg: ${asset ? asset.reg : 'Unknown'}?`)) {
+                vehicleAssets = vehicleAssets.filter(a => a.id !== assetId);
+                saveAssetsToStorage(); // Save after removal
+                renderAllTables(document.getElementById('assetSearch').value); // Re-render all tables
+            }
+        };
+        
+        // Function to toggle between showing all assets and 30-day view
+        const toggleAssetFilter = () => {
+            showAllAssets = !showAllAssets;
+            renderAssetTable(document.getElementById('assetSearch').value);
+        };
+
+        // Function for searching
+        const searchAssets = () => {
+            const searchTerm = document.getElementById('assetSearch').value;
+            renderAssetTable(searchTerm);
+        };
+
+        // Function to update date and time
+        const updateDateTime = () => {
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+            document.getElementById('datetime').textContent = now.toLocaleDateString('en-US', options);
+        };
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAssetsFromStorage();
+            renderAllTables();
+            updateDateTime(); // Initial call
+            setInterval(updateDateTime, 1000); // Update every second
+        });
+    </script>
+
+</body>
+</html>
